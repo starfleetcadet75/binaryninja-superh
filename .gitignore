@@ -1,0 +1,8 @@
+target/
+**/*.rs.bk
+**/*.sw[po]
+**/*.orig
+**/*.o
+**/Cargo.lock
+.idea/
+.vscode/

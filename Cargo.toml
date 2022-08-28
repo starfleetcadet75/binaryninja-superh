@@ -1,0 +1,20 @@
+[package]
+name = "binaryninja-superh"
+version = "0.1.0"
+edition = "2021"
+authors = ["starfleetcadet75 <starfleetcadet75@gmail.com>"]
+description = "SuperH Architecture Support for Binary Ninja"
+readme = "README.md"
+license-file = "LICENSE"
+repository = "https://github.com/starfleetcadet75/binaryninja-superh"
+
+[lib]
+name = "arch_superh"
+crate-type = ["cdylib"]
+
+[dependencies]
+binaryninja = { git = "https://github.com/Vector35/binaryninja-api.git", branch = "dev" }
+bitflags = "1.3"
+log = "0.4"
+strum = "0.24"
+strum_macros = "0.24"
