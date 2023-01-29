@@ -6,7 +6,7 @@ This plugin provides support for working with the [SuperH architecture](https://
 
 ## Install
 
-To build from source, ensure that both [Rust](https://www.rust-lang.org/learn/get-started) and Binary Ninja are installed.
+Ensure that [Rust](https://www.rust-lang.org/learn/get-started), Clang, and Binary Ninja are installed in order to build from source.
 
 ```none
 git clone https://github.com/starfleetcadet75/binaryninja-superh.git

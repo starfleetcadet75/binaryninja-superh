@@ -75,7 +75,7 @@ impl Instruction {
             }
             Operation::Braf => {
                 if let Operand::Reg(rm) = self.operands[0] {
-                    let target = il.add(max_width, rm, address.wrapping_add(4)).into_expr();
+                    let target = il.add(max_width, rm, address.wrapping_add(4));
                     il.jump(target).append();
                 }
             }
@@ -95,7 +95,7 @@ impl Instruction {
                 if let Operand::Reg(rm) = self.operands[0] {
                     il.set_reg(max_width, SuperhRegister::PR, address.wrapping_add(4));
 
-                    let target = il.add(max_width, rm, address.wrapping_add(4)).into_expr();
+                    let target = il.add(max_width, rm, address.wrapping_add(4));
                     il.call(target).append();
                 }
             }

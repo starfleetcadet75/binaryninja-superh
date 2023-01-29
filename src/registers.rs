@@ -185,7 +185,7 @@ impl<'a> LiftableWithSize<'a, SuperhArch> for SuperhRegister {
 
         let expr = il.reg(reg.size(), reg);
         if size < reg.size() {
-            il.low_part(size, expr).into()
+            il.low_part(size, expr).build()
         } else {
             expr
         }
