@@ -125,7 +125,7 @@ impl binaryninja::architecture::Register for SuperhRegister {
     }
 }
 
-impl binaryninja::architecture::RegisterInfo for SuperhRegister {
+impl RegisterInfo for SuperhRegister {
     type RegType = Self;
 
     fn parent(&self) -> Option<Self::RegType> {

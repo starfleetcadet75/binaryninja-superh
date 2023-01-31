@@ -4207,9 +4207,9 @@ impl Instruction {
                         } else if imm < 0 {
                             format!("-{}", -imm)
                         } else if imm < 10 {
-                            format!("{}", imm)
+                            format!("{imm}")
                         } else {
-                            format!("{:#x}", imm)
+                            format!("{imm:#x}")
                         }),
                         TextContent::Integer(imm as i64 as u64),
                     ));
@@ -4217,12 +4217,12 @@ impl Instruction {
                 Operand::Address(addr) => {
                     if self.operation == Operation::Mov {
                         tokens.push(TextToken::new(
-                            BnString::new(format!("{:#x}", addr)),
+                            BnString::new(format!("{addr:#x}")),
                             TextContent::PossibleAddress(*addr),
                         ));
                     } else {
                         tokens.push(TextToken::new(
-                            BnString::new(format!("{:#x}", addr)),
+                            BnString::new(format!("{addr:#x}")),
                             TextContent::CodeRelativeAddress(*addr),
                         ));
                     }
@@ -4291,19 +4291,21 @@ impl Instruction {
 }
 
 /// Handles calculation of a 8-bit sign extension.
+#[inline]
 fn disp8(disp: u8, address: u32) -> u32 {
     let mut disp = disp as u32;
     if (disp & 0x80) != 0 {
         disp |= 0xffff_ff00;
     }
-    address.wrapping_add((disp << 1) + 4)
+    address.wrapping_add((disp << 1).wrapping_add(4))
 }
 
 /// Handles calculation of a 12-bit sign extension for BRA and BSR instructions.
+#[inline]
 fn disp12(disp: u16, address: u32) -> u32 {
     let mut disp = (disp & 0x0fff) as u32;
     if (disp & 0x800) != 0 {
         disp |= 0xffff_f000;
     }
-    address.wrapping_add((disp << 1) + 4)
+    address.wrapping_add((disp << 1).wrapping_add(4))
 }

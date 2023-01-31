@@ -122,7 +122,7 @@ impl Architecture for SuperhArch {
                     result.add_branch(BranchInfo::FunctionReturn, None)
                 }
                 Operation::Trapa => result.add_branch(BranchInfo::SystemCall, None),
-                _ => {}
+                _ => {} // Do nothing for non-control flow instructions.
             }
 
             result
