@@ -34,7 +34,7 @@ impl Architecture for SuperhArch {
     type FlagClass = SuperhFlag;
     type FlagGroup = SuperhFlag;
 
-    fn endianness(&self) -> binaryninja::Endianness {
+    fn endianness(&self) -> Endianness {
         self.endian
     }
 
@@ -54,14 +54,16 @@ impl Architecture for SuperhArch {
     }
 
     fn max_instr_len(&self) -> usize {
-        // SuperH uses 16-bit fixed-length instructions.
-        // There are extensions for 32-bit instructions
-        // which would require this to expand.
-        2
+        // SuperH uses 16-bit fixed-length instructions which would be 2 bytes, however we
+        // use 4 here due to the delay slots. In order to lift delay slot instructions in
+        // the correct order, we must lift multiple instructions at once which requires
+        // the data buffer passed to `instruction_lift()` to be large enough.
+        // There are extensions for 32-bit instructions which would require this to expand.
+        4
     }
 
     fn opcode_display_len(&self) -> usize {
-        self.max_instr_len()
+        2
     }
 
     fn associated_arch_by_addr(&self, _address: &mut u64) -> CoreArchitecture {
@@ -69,9 +71,9 @@ impl Architecture for SuperhArch {
     }
 
     fn instruction_info(&self, data: &[u8], address: u64) -> Option<InstructionInfo> {
-        if data.len() < self.max_instr_len() {
+        if data.len() < 2 {
             warn!(
-                "Data passed to instruction_info is not 2 bytes long: address = {:08x}, len = {}",
+                "Data passed to instruction_info is not large enough: address = {:08x}, len = {}",
                 address,
                 data.len()
             );
@@ -79,7 +81,7 @@ impl Architecture for SuperhArch {
         }
 
         // Safe unwrap is ensured by the above length check.
-        let data = data[..self.max_instr_len()].try_into().unwrap();
+        let data = data[..2].try_into().unwrap();
 
         let instr_word = match self.endianness() {
             Endianness::LittleEndian => u16::from_le_bytes(data),
@@ -87,7 +89,7 @@ impl Architecture for SuperhArch {
         };
 
         Instruction::decompose(instr_word, address, self.isa_version).map(|instr| {
-            let mut result = InstructionInfo::new(self.max_instr_len(), instr.delay_slot);
+            let mut result = InstructionInfo::new(2, instr.delay_slot);
 
             match instr.operation {
                 Operation::Bra => match instr.operands[0] {
@@ -110,10 +112,7 @@ impl Architecture for SuperhArch {
                 // }
                 Operation::Bf | Operation::Bt => match instr.operands[0] {
                     Operand::Address(branch_address) => {
-                        result.add_branch(
-                            BranchInfo::False(address.wrapping_add(self.max_instr_len() as u64)),
-                            None,
-                        );
+                        result.add_branch(BranchInfo::False(address.wrapping_add(2)), None);
                         result.add_branch(BranchInfo::True(branch_address), None);
                     }
                     _ => unreachable!(),
@@ -134,38 +133,9 @@ impl Architecture for SuperhArch {
         data: &[u8],
         address: u64,
     ) -> Option<(usize, Vec<InstructionTextToken>)> {
-        if data.len() < self.max_instr_len() {
-            warn!(
-                "Data passed to instruction_text is not 2 bytes long: address = {:08x}, len = {}",
-                address,
-                data.len()
-            );
-            return None;
-        }
-
-        // Safe unwrap is ensured by the above length check.
-        let data = data[..self.max_instr_len()].try_into().unwrap();
-
-        let instr_word = match self.endianness() {
-            Endianness::LittleEndian => u16::from_le_bytes(data),
-            Endianness::BigEndian => u16::from_be_bytes(data),
-        };
-
-        Instruction::decompose(instr_word, address, self.isa_version)
-            .map(|instr| (self.max_instr_len(), instr.disassemble()))
-    }
-
-    fn instruction_llil(
-        &self,
-        data: &[u8],
-        address: u64,
-        il: &mut llil::Lifter<Self>,
-    ) -> Option<(usize, bool)> {
-        let max_width = self.default_integer_size();
-
         if data.len() < 2 {
             warn!(
-                "Data passed to instruction_llil is not 2 bytes long: address = {:08x}, len = {}",
+                "Data passed to instruction_text is not large enough: address = {:08x}, len = {}",
                 address,
                 data.len()
             );
@@ -175,45 +145,75 @@ impl Architecture for SuperhArch {
         // Safe unwrap is ensured by the above length check.
         let data = data[..2].try_into().unwrap();
 
-        let mut lifted_count = 2;
         let instr_word = match self.endianness() {
             Endianness::LittleEndian => u16::from_le_bytes(data),
             Endianness::BigEndian => u16::from_be_bytes(data),
         };
 
+        Instruction::decompose(instr_word, address, self.isa_version)
+            .map(|instr| (2, instr.disassemble()))
+    }
+
+    fn instruction_llil(
+        &self,
+        data: &[u8],
+        address: u64,
+        il: &mut llil::Lifter<Self>,
+    ) -> Option<(usize, bool)> {
+        if data.len() < 2 {
+            warn!(
+                "Data passed to instruction_llil is not large enough: address = {:08x}, len = {}",
+                address,
+                data.len()
+            );
+            return None;
+        }
+
+        // Track the number of bytes consumed by lifting.
+        let mut lifted_count = 2;
+
+        // Safe unwrap is ensured by the above length check.
+        let first_word = data[..2].try_into().unwrap();
+
+        let instr_word = match self.endianness() {
+            Endianness::LittleEndian => u16::from_le_bytes(first_word),
+            Endianness::BigEndian => u16::from_be_bytes(first_word),
+        };
+
         Instruction::decompose(instr_word, address, self.isa_version).map(|instr| {
             // To handle instructions that are executed from the delay slot,
-            // lift the next instruction first so that it appears before the
+            // lift the following instruction first so that it appears before the
             // control flow instruction in the IL.
             if instr.delay_slot {
-                // Ensure the data is large enough to support lifting a second instruction.
-                if 4 <= data.len() {
-                    let data = data[2..4].try_into().unwrap();
-
-                    let next_instr_word = match self.endianness() {
-                        Endianness::LittleEndian => u16::from_le_bytes(data),
-                        Endianness::BigEndian => u16::from_be_bytes(data),
-                    };
-
-                    lifted_count += Instruction::decompose(
-                        next_instr_word,
-                        address + 2,
-                        self.isa_version,
-                    )
-                    .map(|next_instr| {
-                        next_instr.lift(il, address + 2, max_width);
-                        2
-                    })
-                    .unwrap_or(0);
-                } else {
+                if data.len() < 4 {
                     warn!(
                         "Delay slot instruction found at {:#x} but data not large enough to lift: {:?}",
                         address, data
                     );
                 }
+                else {
+                    // Safe unwrap is ensured by the first length check.
+                    let second_word = data[2..4].try_into().unwrap();
+
+                    let next_instr_word = match self.endianness() {
+                        Endianness::LittleEndian => u16::from_le_bytes(second_word),
+                        Endianness::BigEndian => u16::from_be_bytes(second_word),
+                    };
+
+                    lifted_count += Instruction::decompose(
+                        next_instr_word,
+                        address.wrapping_add(2),
+                        self.isa_version,
+                    )
+                        .map(|next_instr| {
+                            next_instr.lift(il, address.wrapping_add(2), self.default_integer_size());
+                            2
+                        })
+                        .unwrap_or(0);
+                }
             }
 
-            instr.lift(il, address, max_width);
+            instr.lift(il, address, self.default_integer_size());
             (lifted_count, true)
         })
     }
