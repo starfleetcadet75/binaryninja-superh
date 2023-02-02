@@ -1,5 +1,8 @@
 use binaryninja::llil;
+use binaryninja::llil::Label;
 
+use crate::flags::{FlagWrite, SuperhFlag};
+use crate::instructions::Conditional;
 use crate::{
     instructions::{Instruction, Operand, OperandFlag, Operation},
     registers::SuperhRegister,
@@ -10,29 +13,50 @@ impl Instruction {
     pub fn lift(&self, il: &mut llil::Lifter<SuperhArch>, address: u64, max_width: usize) {
         match self.operation {
             Operation::Add => {
-                let right = match self.operands[1] {
-                    Operand::Reg(reg) => reg,
-                    _ => unreachable!(),
-                };
-
-                match self.operands[0] {
-                    Operand::Reg(left) => {
-                        il.set_reg(max_width, right, il.add(max_width, left, right))
+                if let Operand::Reg(right) = self.operands[1] {
+                    match self.operands[0] {
+                        Operand::Reg(left) => {
+                            il.set_reg(max_width, right, il.add(max_width, left, right))
+                                .append();
+                        }
+                        Operand::Imm(imm) => {
+                            il.set_reg(
+                                max_width,
+                                right,
+                                il.add(max_width, right, il.sx(max_width, imm)),
+                            )
                             .append();
+                        }
+                        _ => unreachable!(),
                     }
-                    Operand::Imm(imm) => {
+                }
+            }
+            Operation::Addc => {
+                if let Operand::Reg(rm) = self.operands[0] {
+                    if let Operand::Reg(rn) = self.operands[1] {
                         il.set_reg(
                             max_width,
-                            right,
-                            il.add(max_width, right, il.sx(max_width, imm)),
+                            rn,
+                            il.adc(max_width, rm, rn, il.flag(SuperhFlag::T))
+                                .with_flag_write(FlagWrite::T),
                         )
                         .append();
                     }
-                    _ => unreachable!(),
                 }
             }
-            Operation::Addc => il.unimplemented().append(),
-            Operation::Addv => il.unimplemented().append(),
+            Operation::Addv => {
+                if let Operand::Reg(rm) = self.operands[0] {
+                    if let Operand::Reg(rn) = self.operands[1] {
+                        il.set_reg(
+                            max_width,
+                            rn,
+                            il.add_overflow(max_width, rm, rn)
+                                .with_flag_write(FlagWrite::T),
+                        )
+                        .append();
+                    }
+                }
+            }
             Operation::And => match self.operands[0] {
                 Operand::Reg(rm) => {
                     if let Operand::Reg(rn) = self.operands[1] {
@@ -59,7 +83,35 @@ impl Instruction {
             Operation::Band => il.unimplemented().append(),
             Operation::Bandnot => il.unimplemented().append(),
             Operation::Bclr => il.unimplemented().append(),
-            Operation::Bf => il.unimplemented().append(),
+            Operation::Bf => {
+                if let Operand::Address(true_target) = self.operands[0] {
+                    // Take the branch if T flag is not set.
+                    let false_target = address.wrapping_add(2);
+
+                    let mut new_true_label = Label::new();
+                    let mut new_false_label = Label::new();
+
+                    let true_label = il.label_for_address(true_target);
+                    let false_label = il.label_for_address(false_target);
+
+                    il.if_expr(
+                        il.not(max_width, il.flag(SuperhFlag::T)),
+                        true_label.unwrap_or(&new_true_label),
+                        false_label.unwrap_or(&new_false_label),
+                    )
+                    .append();
+
+                    if true_label.is_none() {
+                        il.mark_label(&mut new_true_label);
+                    }
+
+                    il.goto(true_label.unwrap_or(&new_true_label)).append();
+
+                    if false_label.is_none() {
+                        il.mark_label(&mut new_false_label);
+                    }
+                }
+            }
             Operation::Bld => il.unimplemented().append(),
             Operation::Bldnot => il.unimplemented().append(),
             Operation::Bor => il.unimplemented().append(),
@@ -68,7 +120,7 @@ impl Instruction {
                 if let Operand::Address(target) = self.operands[0] {
                     match il.label_for_address(target) {
                         Some(label) => il.goto(label),
-                        None => il.call(il.const_ptr(target)),
+                        None => il.jump(il.const_ptr(target)),
                     }
                     .append();
                 }
@@ -101,39 +153,32 @@ impl Instruction {
             }
             Operation::Bst => il.unimplemented().append(),
             Operation::Bt => {
-                // TODO: Figure out how to implement the flags using the Rust API:
-                // https://binary.ninja/2021/12/09/guide-to-architecture-plugins-part2.html#llil-lifting-conditional-instructions
-                // https://docs.binary.ninja/dev/flags.html
-                if let Operand::Address(_true_target) = self.operands[0] {
-                    // Take branch if T = 1
-                    // let cond_expr = il.flag_cond(FlagCondition::);
+                if let Operand::Address(true_target) = self.operands[0] {
+                    // Take the branch if T flag is set.
+                    let false_target = address.wrapping_add(2);
 
-                    // let mut new_false: Option<Label> = None;
-                    // let mut new_true: Option<Label> = None;
+                    let mut new_true_label = Label::new();
+                    let mut new_false_label = Label::new();
 
-                    // let false_target = address.wrapping_add(2);
+                    let true_label = il.label_for_address(true_target);
+                    let false_label = il.label_for_address(false_target);
 
-                    // let f = il.label_for_address(false_target).unwrap_or_else(|| {
-                    //     new_false = Some(Label::new());
-                    //     new_false.as_ref().unwrap()
-                    // });
+                    il.if_expr(
+                        il.flag(SuperhFlag::T),
+                        true_label.unwrap_or(&new_true_label),
+                        false_label.unwrap_or(&new_false_label),
+                    )
+                    .append();
 
-                    // let t = il.label_for_address(true_target).unwrap_or_else(|| {
-                    //     new_true = Some(Label::new());
-                    //     new_true.as_ref().unwrap()
-                    // });
+                    if true_label.is_none() {
+                        il.mark_label(&mut new_true_label);
+                    }
 
-                    // il.if_expr(cond_expr, t, f).append();
+                    il.goto(true_label.unwrap_or(&new_true_label)).append();
 
-                    // if let Some(t) = new_true.as_mut() {
-                    //     il.mark_label(t);
-
-                    //     il.jump(il.const_ptr(true_target)).append();
-                    // }
-
-                    // if let Some(f) = new_false.as_mut() {
-                    //     il.mark_label(f);
-                    // }
+                    if false_label.is_none() {
+                        il.mark_label(&mut new_false_label);
+                    }
                 }
             }
             Operation::Bxor => il.unimplemented().append(),
@@ -145,17 +190,119 @@ impl Instruction {
             }
             Operation::Clrs => il.unimplemented().append(),
             Operation::Clrt => il.unimplemented().append(),
-            Operation::Cmp => il.unimplemented().append(),
+            Operation::Cmp => {
+                let left = match self.operands[0] {
+                    Operand::Reg(reg) => il.reg(max_width, reg),
+                    Operand::Imm(imm) => il.sx(max_width, il.const_int(1, imm as u64)).build(),
+                    _ => unreachable!(),
+                };
+
+                let right = match self.cond.unwrap() {
+                    Conditional::Pl | Conditional::Pz => il.const_int(1, 0),
+                    _ => match self.operands[1] {
+                        Operand::Reg(reg) => il.reg(max_width, reg),
+                        _ => unreachable!(),
+                    },
+                };
+
+                match self.cond.unwrap() {
+                    Conditional::Eq => {
+                        // This instruction sets the T-bit if the value of R0 is equal to the sign-extended 8-bit
+                        // immediate s, otherwise it clears the T-bit.
+                        il.set_flag(
+                            SuperhFlag::T,
+                            il.cmp_e(max_width, left, right)
+                                .with_flag_write(FlagWrite::T),
+                        )
+                        .append();
+                    }
+                    Conditional::Ge => {
+                        // This instruction sets the T-bit if the signed value of Rn is greater than or equal to
+                        // the signed value of Rm, otherwise it clears the T-bit.
+                        il.set_flag(
+                            SuperhFlag::T,
+                            il.cmp_sge(max_width, left, right)
+                                .with_flag_write(FlagWrite::T),
+                        )
+                        .append();
+                    }
+                    Conditional::Gt => {
+                        // This instruction sets the T-bit if the signed value of Rn is greater than the signed
+                        // value of Rm, otherwise it clears the T-bit.
+                        il.set_flag(
+                            SuperhFlag::T,
+                            il.cmp_sgt(max_width, left, right)
+                                .with_flag_write(FlagWrite::T),
+                        )
+                        .append();
+                    }
+                    Conditional::Hi => {
+                        // This instruction sets the T-bit if the unsigned value of Rn is greater than the
+                        // unsigned value of Rm, otherwise it clears the T-bit.
+                        il.set_flag(
+                            SuperhFlag::T,
+                            il.cmp_ugt(max_width, left, right)
+                                .with_flag_write(FlagWrite::T),
+                        )
+                        .append();
+                    }
+                    Conditional::Hs => {
+                        // This instruction sets the T-bit if the unsigned value of Rn is greater than or equal to
+                        // the unsigned value of Rm, otherwise it clears the T-bit.
+                        il.set_flag(
+                            SuperhFlag::T,
+                            il.cmp_uge(max_width, left, right)
+                                .with_flag_write(FlagWrite::T),
+                        )
+                        .append();
+                    }
+                    Conditional::Pl => {
+                        // This instruction sets the T-bit if the signed value of Rn is greater than 0, otherwise
+                        // it clears the T-bit.
+                        il.set_flag(
+                            SuperhFlag::T,
+                            il.cmp_sgt(max_width, left, right)
+                                .with_flag_write(FlagWrite::T),
+                        )
+                        .append();
+                    }
+                    Conditional::Pz => {
+                        // This instruction sets the T-bit if the signed value of Rn is greater than or equal to 0,
+                        // otherwise it clears the T-bit.
+                        il.set_flag(
+                            SuperhFlag::T,
+                            il.cmp_sge(max_width, left, right)
+                                .with_flag_write(FlagWrite::T),
+                        )
+                        .append();
+                    }
+                    Conditional::Str => {
+                        // This instruction sets the T-bit if any byte in Rn has the same value as the
+                        // corresponding byte in Rm, otherwise it clears the T-bit.
+                        il.unimplemented().append()
+                    }
+                };
+            }
             Operation::Dcf => il.unimplemented().append(),
             Operation::Dct => il.unimplemented().append(),
             Operation::Div0s => il.unimplemented().append(),
-            Operation::Div0u => il.unimplemented().append(),
+            Operation::Div0u => {
+                il.set_flag(SuperhFlag::M, il.const_int(1, 0)).append();
+                il.set_flag(SuperhFlag::Q, il.const_int(1, 0)).append();
+                il.set_flag(SuperhFlag::T, il.const_int(1, 0)).append();
+            }
             Operation::Div1 => il.unimplemented().append(),
             Operation::Divs => il.unimplemented().append(),
             Operation::Divu => il.unimplemented().append(),
             Operation::Dmuls => il.unimplemented().append(),
             Operation::Dmulu => il.unimplemented().append(),
-            Operation::Dt => il.unimplemented().append(),
+            Operation::Dt => {
+                if let Operand::Reg(reg) = self.operands[0] {
+                    il.sub(max_width, reg, il.const_int(1, 1)).append();
+                    il.set_flag(SuperhFlag::T, il.cmp_e(max_width, reg, il.const_int(1, 0)))
+                        .append();
+                }
+            }
             Operation::Exts => il.unimplemented().append(),
             Operation::Extu => il.unimplemented().append(),
             Operation::Fabs => il.unimplemented().append(),
@@ -340,9 +487,18 @@ impl Instruction {
             Operation::Movli => il.unimplemented().append(),
             Operation::Movml => il.unimplemented().append(),
             Operation::Movmu => il.unimplemented().append(),
-            Operation::Movrt => il.unimplemented().append(),
+            Operation::Movrt => {
+                if let Operand::Reg(reg) = self.operands[0] {
+                    il.set_reg(max_width, reg, il.not(0, il.flag(SuperhFlag::T)))
+                        .append();
+                }
+            }
             Operation::Movs => il.unimplemented().append(),
-            Operation::Movt => il.unimplemented().append(),
+            Operation::Movt => {
+                if let Operand::Reg(reg) = self.operands[0] {
+                    il.set_reg(max_width, reg, il.flag(SuperhFlag::T)).append();
+                }
+            }
             Operation::Movu => il.unimplemented().append(),
             Operation::Movua => il.unimplemented().append(),
             Operation::Movx => il.unimplemented().append(),
@@ -362,11 +518,34 @@ impl Instruction {
                     }
                 }
             }
-            Operation::Nott => il.unimplemented().append(),
+            Operation::Nott => il
+                .set_flag(SuperhFlag::T, il.not(0, il.flag(SuperhFlag::T)))
+                .append(),
             Operation::Ocbi => il.unimplemented().append(),
             Operation::Ocbp => il.unimplemented().append(),
             Operation::Ocbwb => il.unimplemented().append(),
-            Operation::Or => il.unimplemented().append(),
+            Operation::Or => {
+                let left = match self.operands[0] {
+                    Operand::Reg(reg) => il.reg(max_width, reg),
+                    Operand::Imm(imm) => il.zx(max_width, il.const_int(1, imm as u64)).build(),
+                    _ => unreachable!(),
+                };
+
+                let right = match self.operands[1] {
+                    Operand::Reg(reg) => il.reg(max_width, reg),
+                    Operand::DerefRegReg(r0, gbr) => il.load(1, il.add(max_width, r0, gbr)).build(),
+                    _ => unreachable!(),
+                };
+
+                let value = il.or(max_width, left, right);
+                match self.operands[1] {
+                    Operand::Reg(reg) => il.set_reg(max_width, reg, value).append(),
+                    Operand::DerefRegReg(r0, gbr) => {
+                        il.store(1, il.add(max_width, r0, gbr), value).append()
+                    }
+                    _ => unreachable!(),
+                };
+            }
             Operation::Pabs => il.unimplemented().append(),
             Operation::Padd => il.unimplemented().append(),
             Operation::Paddc => il.unimplemented().append(),
@@ -418,8 +597,8 @@ impl Instruction {
                 }
             }
             Operation::Setrc => il.unimplemented().append(),
-            Operation::Sets => il.unimplemented().append(),
-            Operation::Sett => il.unimplemented().append(),
+            Operation::Sets => il.set_flag(SuperhFlag::S, il.const_int(1, 1)).append(),
+            Operation::Sett => il.set_flag(SuperhFlag::T, il.const_int(1, 1)).append(),
             Operation::Shad => il.unimplemented().append(),
             Operation::Shal => il.unimplemented().append(),
             Operation::Shar => il.unimplemented().append(),
@@ -459,10 +638,63 @@ impl Instruction {
             Operation::Subv => il.unimplemented().append(),
             Operation::Swap => il.unimplemented().append(),
             Operation::Synco => il.unimplemented().append(),
-            Operation::Tas => il.unimplemented().append(),
+            Operation::Tas => {
+                if let Operand::Reg(reg) = self.operands[0] {
+                    il.set_flag(
+                        SuperhFlag::T,
+                        il.cmp_e(max_width, il.zx(1, il.load(1, reg)), il.const_int(1, 0)),
+                    )
+                    .append();
+                    il.store(
+                        1,
+                        reg,
+                        il.or(max_width, il.zx(1, il.load(1, reg)), il.const_int(1, 0x80)),
+                    )
+                    .append();
+                }
+            }
             Operation::Trapa => il.syscall().append(),
-            Operation::Tst => il.unimplemented().append(),
-            Operation::Xor => il.unimplemented().append(),
+            Operation::Tst => {
+                let left = match self.operands[0] {
+                    Operand::Reg(reg) => il.reg(max_width, reg),
+                    Operand::Imm(imm) => il.zx(max_width, il.const_int(1, imm as u64)).build(),
+                    _ => unreachable!(),
+                };
+
+                let right = match self.operands[1] {
+                    Operand::Reg(reg) => il.reg(max_width, reg),
+                    Operand::DerefRegReg(r0, gbr) => il.load(1, il.add(max_width, r0, gbr)).build(),
+                    _ => unreachable!(),
+                };
+
+                il.set_flag(
+                    SuperhFlag::T,
+                    il.not(max_width, il.and(max_width, left, right)),
+                )
+                .append();
+            }
+            Operation::Xor => {
+                let left = match self.operands[0] {
+                    Operand::Reg(reg) => il.reg(max_width, reg),
+                    Operand::Imm(imm) => il.zx(max_width, il.const_int(1, imm as u64)).build(),
+                    _ => unreachable!(),
+                };
+
+                let right = match self.operands[1] {
+                    Operand::Reg(reg) => il.reg(max_width, reg),
+                    Operand::DerefRegReg(r0, gbr) => il.load(1, il.add(max_width, r0, gbr)).build(),
+                    _ => unreachable!(),
+                };
+
+                let value = il.xor(max_width, left, right);
+                match self.operands[1] {
+                    Operand::Reg(reg) => il.set_reg(max_width, reg, value).append(),
+                    Operand::DerefRegReg(r0, gbr) => {
+                        il.store(1, il.add(max_width, r0, gbr), value).append()
+                    }
+                    _ => unreachable!(),
+                };
+            }
             Operation::Xtrct => il.unimplemented().append(),
         }
     }

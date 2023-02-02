@@ -99,6 +99,7 @@ fn register_calling_conventions(arch: &SuperhArch) {
         .return_hi_int_reg("r1")
         .return_float_reg("fr0")
         .global_pointer_reg("r12")
+        .is_eligible_for_heuristics(true)
         .register("default");
 
     arch.set_default_calling_convention(&calling_convention);
@@ -115,7 +116,7 @@ fn register_linux_syscall_calling_convention(platform: &Platform) {
             "fr5", "fr6", "fr7", "fr8", "fr9", "fr10", "fr11", "mach", "macl", "pr", "fpul",
         ])
         .int_arg_registers(&["r3", "r4", "r5", "r6", "r7", "r0", "r1", "r2"])
-        .is_eligible_for_heuristics(false)
+        .is_eligible_for_heuristics(true)
         .return_int_reg("r0")
         .register("linux-syscall");
     platform.set_syscall_convention(&calling_convention);

@@ -16,23 +16,23 @@ pub enum SuperhFlag {
 }
 
 impl binaryninja::architecture::Flag for SuperhFlag {
-    type FlagClass = Self;
+    type FlagClass = FlagClass;
 
     fn name(&self) -> Cow<str> {
         match self {
-            SuperhFlag::T => Cow::from("T"),
-            SuperhFlag::S => Cow::from("S"),
-            SuperhFlag::M => Cow::from("M"),
-            SuperhFlag::Q => Cow::from("Q"),
+            Self::T => Cow::from("T"),
+            Self::S => Cow::from("S"),
+            Self::M => Cow::from("M"),
+            Self::Q => Cow::from("Q"),
         }
     }
 
     fn role(&self, _class: Option<Self::FlagClass>) -> FlagRole {
         match self {
-            SuperhFlag::T => FlagRole::ZeroFlagRole,
-            SuperhFlag::S => FlagRole::SpecialFlagRole,
-            SuperhFlag::M => FlagRole::SpecialFlagRole,
-            SuperhFlag::Q => FlagRole::SpecialFlagRole,
+            Self::T => FlagRole::SpecialFlagRole,
+            Self::S => FlagRole::SpecialFlagRole,
+            Self::M => FlagRole::SpecialFlagRole,
+            Self::Q => FlagRole::SpecialFlagRole,
         }
     }
 
@@ -41,12 +41,27 @@ impl binaryninja::architecture::Flag for SuperhFlag {
     }
 }
 
-impl binaryninja::architecture::FlagWrite for SuperhFlag {
-    type FlagType = Self;
-    type FlagClass = Self;
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum FlagWrite {
+    None,
+    T,
+    S,
+    M,
+    Q,
+}
+
+impl binaryninja::architecture::FlagWrite for FlagWrite {
+    type FlagType = SuperhFlag;
+    type FlagClass = FlagClass;
 
     fn name(&self) -> Cow<str> {
-        Cow::from("")
+        match self {
+            Self::None => "".into(),
+            Self::T => "t".into(),
+            Self::S => "s".into(),
+            Self::M => "m".into(),
+            Self::Q => "q".into(),
+        }
     }
 
     fn class(&self) -> Option<Self::FlagClass> {
@@ -58,30 +73,42 @@ impl binaryninja::architecture::FlagWrite for SuperhFlag {
     }
 
     fn flags_written(&self) -> Vec<Self::FlagType> {
-        vec![]
+        match self {
+            Self::None => vec![],
+            Self::T => vec![SuperhFlag::T],
+            Self::S => vec![SuperhFlag::S],
+            Self::M => vec![SuperhFlag::M],
+            Self::Q => vec![SuperhFlag::Q],
+        }
     }
 }
 
-impl binaryninja::architecture::FlagClass for SuperhFlag {
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct FlagClass {}
+
+impl binaryninja::architecture::FlagClass for FlagClass {
     fn name(&self) -> Cow<str> {
-        Cow::from("")
+        unimplemented!()
     }
 
     fn id(&self) -> u32 {
-        *self as u32
+        unimplemented!()
     }
 }
 
-impl binaryninja::architecture::FlagGroup for SuperhFlag {
-    type FlagType = Self;
-    type FlagClass = Self;
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum FlagGroup {}
+
+impl binaryninja::architecture::FlagGroup for FlagGroup {
+    type FlagType = SuperhFlag;
+    type FlagClass = FlagClass;
 
     fn name(&self) -> Cow<str> {
-        Cow::from("")
+        unimplemented!()
     }
 
     fn id(&self) -> u32 {
-        *self as u32
+        unimplemented!()
     }
 
     fn flags_required(&self) -> Vec<Self::FlagType> {

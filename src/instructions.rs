@@ -4200,18 +4200,18 @@ impl Instruction {
 
                     // TODO: There still seems to be an issue getting the immediate
                     // to appear as negative.
-                    let imm = *imm;
+                    let i = *imm;
                     tokens.push(TextToken::new(
-                        BnString::new(if imm < -9 {
-                            format!("-{:#x}", -imm)
-                        } else if imm < 0 {
-                            format!("-{}", -imm)
-                        } else if imm < 10 {
-                            format!("{imm}")
+                        BnString::new(if i < -9 {
+                            format!("-{:#x}", -i)
+                        } else if i < 0 {
+                            format!("-{}", -i)
+                        } else if i < 10 {
+                            format!("{i}")
                         } else {
-                            format!("{imm:#x}")
+                            format!("{i:#x}")
                         }),
-                        TextContent::Integer(imm as i64 as u64),
+                        TextContent::Integer(*imm as i64 as u64),
                     ));
                 }
                 Operand::Address(addr) => {

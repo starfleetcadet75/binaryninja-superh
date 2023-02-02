@@ -9,6 +9,7 @@ use binaryninja::{
 use log::warn;
 use strum::IntoEnumIterator;
 
+use crate::flags::{FlagClass, FlagGroup, FlagWrite};
 use crate::{
     flags::SuperhFlag,
     instructions::{Instruction, Operation},
@@ -30,9 +31,9 @@ impl Architecture for SuperhArch {
     type Register = SuperhRegister;
 
     type Flag = SuperhFlag;
-    type FlagWrite = SuperhFlag;
-    type FlagClass = SuperhFlag;
-    type FlagGroup = SuperhFlag;
+    type FlagWrite = FlagWrite;
+    type FlagClass = FlagClass;
+    type FlagGroup = FlagGroup;
 
     fn endianness(&self) -> Endianness {
         self.endian
@@ -63,7 +64,7 @@ impl Architecture for SuperhArch {
     }
 
     fn opcode_display_len(&self) -> usize {
-        2
+        self.max_instr_len()
     }
 
     fn associated_arch_by_addr(&self, _address: &mut u64) -> CoreArchitecture {
