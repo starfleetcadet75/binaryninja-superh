@@ -1,7 +1,7 @@
 use binaryninja::{
     architecture::{
         Architecture, BranchInfo, CoreArchitecture, CustomArchitectureHandle, FlagCondition,
-        InstructionInfo,
+        InstructionInfo, UnusedIntrinsic, UnusedRegisterStack, UnusedRegisterStackInfo,
     },
     disassembly::InstructionTextToken,
     llil, Endianness,
@@ -29,6 +29,10 @@ impl Architecture for SuperhArch {
 
     type RegisterInfo = SuperhRegister;
     type Register = SuperhRegister;
+    type RegisterStackInfo = UnusedRegisterStackInfo<Self::Register>;
+    type RegisterStack = UnusedRegisterStack<Self::Register>;
+
+    type Intrinsic = UnusedIntrinsic;
 
     type Flag = SuperhFlag;
     type FlagWrite = FlagWrite;

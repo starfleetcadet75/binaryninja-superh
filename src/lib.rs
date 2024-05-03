@@ -1,4 +1,5 @@
 use binaryninja::{
+    add_optional_plugin_dependency,
     architecture::{register_architecture, ArchitectureExt, CustomArchitectureHandle},
     callingconvention::ConventionBuilder,
     custombinaryview::{BinaryViewType, BinaryViewTypeExt},
@@ -16,6 +17,7 @@ mod lifter;
 mod registers;
 
 bitflags::bitflags! {
+    #[derive(Copy, Clone, Debug, Eq, PartialEq)]
     pub struct SuperhVersion: u8 {
         const SH1 = 0b0000_0001;
         const SH2 = 0b0000_0010;
@@ -80,6 +82,12 @@ pub extern "C" fn CorePluginInit() -> bool {
     register_linux_syscall_calling_convention(&platform);
 
     true
+}
+
+#[no_mangle]
+#[allow(non_snake_case)]
+pub extern "C" fn CorePluginDependencies() {
+    add_optional_plugin_dependency("view_elf");
 }
 
 // Calling conventions based on:
