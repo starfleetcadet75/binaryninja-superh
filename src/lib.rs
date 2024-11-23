@@ -34,7 +34,9 @@ bitflags::bitflags! {
 #[no_mangle]
 #[allow(non_snake_case)]
 pub extern "C" fn CorePluginInit() -> bool {
-    binaryninja::logger::init(LevelFilter::Trace).expect("failed to setup logging");
+    binaryninja::logger::Logger::new("superh")
+        .with_level(LevelFilter::Trace)
+        .init();
 
     trace!("Registering SuperH architectures");
     let sh4_arch = register_architecture(

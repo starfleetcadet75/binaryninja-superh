@@ -1,4 +1,4 @@
-use binaryninja::{architecture::Register, string::BnString};
+use binaryninja::architecture::Register;
 use log::warn;
 use strum_macros::{Display, EnumCount as EnumCountMacro, EnumIter, FromRepr};
 
@@ -4175,14 +4175,11 @@ impl Instruction {
         }
 
         let pad_len = 10usize.saturating_sub(mnemonic.len());
-        tokens.push(TextToken::new(
-            BnString::new(mnemonic),
-            TextContent::Instruction,
-        ));
+        tokens.push(TextToken::new(&mnemonic, TextContent::Instruction));
 
         if !self.operands.is_empty() {
             tokens.push(TextToken::new(
-                BnString::new(format!("{:1$}", " ", pad_len)),
+                &format!("{:1$}", " ", pad_len),
                 TextContent::Text,
             ));
         }
@@ -4191,98 +4188,79 @@ impl Instruction {
             match operand {
                 Operand::Reg(reg) => {
                     tokens.push(TextToken::new(
-                        BnString::new(format!("{}", reg.name())),
+                        &format!("{}", reg.name()),
                         TextContent::Register,
                     ));
                 }
                 Operand::Imm(imm) => {
-                    tokens.push(TextToken::new(BnString::new("#"), TextContent::Text));
+                    tokens.push(TextToken::new("#", TextContent::Text));
 
                     // TODO: There still seems to be an issue getting the immediate
                     // to appear as negative.
                     let i = *imm;
-                    tokens.push(TextToken::new(
-                        BnString::new(if i < -9 {
-                            format!("-{:#x}", -i)
-                        } else if i < 0 {
-                            format!("-{}", -i)
-                        } else if i < 10 {
-                            format!("{i}")
-                        } else {
-                            format!("{i:#x}")
-                        }),
-                        TextContent::Integer(*imm as i64 as u64),
-                    ));
+                    let i = if i < -9 {
+                        format!("-{:#x}", -i)
+                    } else if i < 0 {
+                        format!("-{}", -i)
+                    } else if i < 10 {
+                        format!("{i}")
+                    } else {
+                        format!("{i:#x}")
+                    };
+
+                    tokens.push(TextToken::new(&i, TextContent::Integer(*imm as i64 as u64)));
                 }
                 Operand::Address(addr) => {
                     if self.operation == Operation::Mov {
                         tokens.push(TextToken::new(
-                            BnString::new(format!("{addr:#x}")),
+                            &format!("{addr:#x}"),
                             TextContent::PossibleAddress(*addr),
                         ));
                     } else {
                         tokens.push(TextToken::new(
-                            BnString::new(format!("{addr:#x}")),
+                            &format!("{addr:#x}"),
                             TextContent::CodeRelativeAddress(*addr),
                         ));
                     }
                 }
                 Operand::DerefReg(reg, flag) => {
-                    tokens.push(TextToken::new(
-                        BnString::new("@"),
-                        TextContent::BeginMemoryOperand,
-                    ));
+                    tokens.push(TextToken::new("@", TextContent::BeginMemoryOperand));
 
                     if *flag == OperandFlag::PreDec {
-                        tokens.push(TextToken::new(BnString::new("-"), TextContent::Text));
+                        tokens.push(TextToken::new("-", TextContent::Text));
                     }
 
                     tokens.push(TextToken::new(
-                        BnString::new(format!("{}", reg.name())),
+                        &format!("{}", reg.name()),
                         TextContent::Register,
                     ));
 
                     if *flag == OperandFlag::PostInc {
-                        tokens.push(TextToken::new(BnString::new("+"), TextContent::Text));
+                        tokens.push(TextToken::new("+", TextContent::Text));
                     }
                 }
                 Operand::DerefRegReg(rn, rm) => {
                     tokens.extend([
-                        TextToken::new(BnString::new("@("), TextContent::BeginMemoryOperand),
-                        TextToken::new(
-                            BnString::new(format!("{}", rn.name())),
-                            TextContent::Register,
-                        ),
-                        TextToken::new(BnString::new(","), TextContent::OperandSeparator),
-                        TextToken::new(
-                            BnString::new(format!("{}", rm.name())),
-                            TextContent::Register,
-                        ),
-                        TextToken::new(BnString::new(")"), TextContent::EndMemoryOperand),
+                        TextToken::new("@(", TextContent::BeginMemoryOperand),
+                        TextToken::new(&format!("{}", rn.name()), TextContent::Register),
+                        TextToken::new(",", TextContent::OperandSeparator),
+                        TextToken::new(&format!("{}", rm.name()), TextContent::Register),
+                        TextToken::new(")", TextContent::EndMemoryOperand),
                     ]);
                 }
                 Operand::DerefRegImm(reg, imm) => {
                     tokens.extend([
-                        TextToken::new(BnString::new("@("), TextContent::BeginMemoryOperand),
-                        TextToken::new(
-                            BnString::new(format!("{imm}")),
-                            TextContent::Integer(*imm as u64),
-                        ),
-                        TextToken::new(BnString::new(","), TextContent::OperandSeparator),
-                        TextToken::new(
-                            BnString::new(format!("{}", reg.name())),
-                            TextContent::Register,
-                        ),
-                        TextToken::new(BnString::new(")"), TextContent::EndMemoryOperand),
+                        TextToken::new("@(", TextContent::BeginMemoryOperand),
+                        TextToken::new(&format!("{imm}"), TextContent::Integer(*imm as u64)),
+                        TextToken::new(",", TextContent::OperandSeparator),
+                        TextToken::new(&format!("{}", reg.name()), TextContent::Register),
+                        TextToken::new(")", TextContent::EndMemoryOperand),
                     ]);
                 }
             }
 
             if i != self.operands.len() - 1 {
-                tokens.push(TextToken::new(
-                    BnString::new(", "),
-                    TextContent::OperandSeparator,
-                ));
+                tokens.push(TextToken::new(", ", TextContent::OperandSeparator));
             }
         }
 

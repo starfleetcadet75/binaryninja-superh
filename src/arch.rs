@@ -32,12 +32,12 @@ impl Architecture for SuperhArch {
     type RegisterStackInfo = UnusedRegisterStackInfo<Self::Register>;
     type RegisterStack = UnusedRegisterStack<Self::Register>;
 
-    type Intrinsic = UnusedIntrinsic;
-
     type Flag = SuperhFlag;
     type FlagWrite = FlagWrite;
     type FlagClass = FlagClass;
     type FlagGroup = FlagGroup;
+
+    type Intrinsic = UnusedIntrinsic;
 
     fn endianness(&self) -> Endianness {
         self.endian
@@ -94,7 +94,7 @@ impl Architecture for SuperhArch {
         };
 
         Instruction::decompose(instr_word, address, self.isa_version).map(|instr| {
-            let mut result = InstructionInfo::new(2, instr.delay_slot);
+            let mut result = InstructionInfo::new(2, instr.delay_slot as u8);
 
             match instr.operation {
                 Operation::Bra => match instr.operands[0] {
@@ -337,6 +337,93 @@ impl Architecture for SuperhArch {
 
     fn flag_group_from_id(&self, _id: u32) -> Option<Self::FlagGroup> {
         None
+    }
+
+    fn intrinsics(&self) -> Vec<Self::Intrinsic> {
+        Vec::new()
+    }
+
+    fn intrinsic_from_id(&self, _id: u32) -> Option<Self::Intrinsic> {
+        None
+    }
+
+    fn can_assemble(&self) -> bool {
+        // LLVM does not have a SuperH target we can use.
+        false
+    }
+
+    fn is_never_branch_patch_available(&self, _data: &[u8], _address: u64) -> bool {
+        // let instr = match Instruction::decompose(instr_word, address, self.isa_version) {
+        //     Some(instr) => instr,
+        //     None => return false,
+        // };
+
+        // match op {
+        //     Op::Beq(_) | Op::Bne(_) | Op::Blt(_) | Op::Bge(_) | Op::BltU(_) | Op::BgeU(_) => true,
+        //     _ => false,
+        // }
+        false
+    }
+
+    fn is_always_branch_patch_available(&self, data: &[u8], addr: u64) -> bool {
+        self.is_never_branch_patch_available(data, addr)
+    }
+
+    fn is_invert_branch_patch_available(&self, data: &[u8], addr: u64) -> bool {
+        self.is_never_branch_patch_available(data, addr)
+    }
+
+    /// is_skip_and_return_zero_patch_available determines if the instruction data at addr is
+    /// a call-like instruction that can be made into an instruction returns zero.
+    fn is_skip_and_return_zero_patch_available(&self, _data: &[u8], _addr: u64) -> bool {
+        // let op = match D::decode(addr, data) {
+        //     Ok(Instr::Rv16(op)) => op,
+        //     Ok(Instr::Rv32(op)) => op,
+        //     _ => return false,
+        // };
+
+        // match op {
+        //     Op::Jal(ref j) if j.rd().id() != 0 => true,
+        //     Op::Jalr(ref j) if j.rd().id() != 0 => true,
+        //     _ => false,
+        // }
+
+        false
+    }
+
+    fn is_skip_and_return_value_patch_available(&self, data: &[u8], addr: u64) -> bool {
+        self.is_skip_and_return_zero_patch_available(data, addr)
+    }
+
+    fn convert_to_nop(&self, mut data: &mut [u8], _addr: u64) -> bool {
+        if data.len() & 1 != 0 {
+            // Cannot convert to nop if not aligned on 16 bit boundary.
+            return false;
+        }
+
+        let nop_instr = match self.endianness() {
+            Endianness::LittleEndian => &[0x09, 0x00],
+            Endianness::BigEndian => &[0x00, 0x09],
+        };
+
+        while !data.is_empty() {
+            data[0..2].copy_from_slice(nop_instr);
+            data = data[2..].as_mut();
+        }
+
+        true
+    }
+
+    fn always_branch(&self, _data: &mut [u8], _addr: u64) -> bool {
+        false
+    }
+
+    fn invert_branch(&self, _data: &mut [u8], _addr: u64) -> bool {
+        false
+    }
+
+    fn skip_and_return_value(&self, _data: &mut [u8], _addr: u64, _value: u64) -> bool {
+        false
     }
 
     fn handle(&self) -> Self::Handle {

@@ -1,6 +1,6 @@
 [package]
 name = "binaryninja-superh"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["starfleetcadet75 <starfleetcadet75@gmail.com>"]
 description = "SuperH Architecture Support for Binary Ninja"
@@ -13,8 +13,8 @@ name = "arch_superh"
 crate-type = ["cdylib"]
 
 [dependencies]
-binaryninja = { git = "https://github.com/Vector35/binaryninja-api.git", tag = "v4.0.4958-stable" }
-bitflags = "2.5"
+binaryninja = { git = "https://github.com/Vector35/binaryninja-api.git", tag = "v4.2.6455-stable" }
+bitflags = "2.6"
 log = "0.4"
 strum = "0.26"
 strum_macros = "0.26"

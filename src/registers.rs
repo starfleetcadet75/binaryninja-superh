@@ -9,7 +9,7 @@ use strum_macros::{Display, EnumCount as EnumCountMacro, EnumIter, FromRepr};
 
 use crate::arch::SuperhArch;
 
-#[derive(Clone, Copy, Debug, Display, Eq, PartialEq, EnumCountMacro, EnumIter, FromRepr)]
+#[derive(Clone, Copy, Debug, Display, Eq, PartialEq, Hash, EnumCountMacro, EnumIter, FromRepr)]
 pub enum SuperhRegister {
     // General-purpose registers.
     R0,
